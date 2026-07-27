@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "993318632370",
+    "project_id": "card-30ee6",
+    "storage_bucket": "card-30ee6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:993318632370:android:03bb079843d726443682ab",
+        "android_client_info": {
+          "package_name": "com.company.card"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAB9poUcHgittLl3157oiCVlyUwZmDiCZ8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

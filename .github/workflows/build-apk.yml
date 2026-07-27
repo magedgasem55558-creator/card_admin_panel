@@ -1,0 +1,37 @@
+name: Build Flutter APK
+
+# يشغل عند رفع أي تغيير على أي فرع أو عند طلب دمج (اختياري)
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 سحب الكود
+        uses: actions/checkout@v4
+
+      - name: 🐦 تثبيت Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'  # أو اتركه لآخر إصدار ثابت
+          channel: 'stable'
+          cache: true
+
+      - name: 📦 تنزيل الحزم
+        run: flutter pub get
+
+      - name: 🧪 تحليل الكود (اختياري)
+        run: flutter analyze
+
+      - name: 🛠️ بناء APK
+        run: flutter build apk --release
+
+      - name: 📤 رفع ملف APK للتحميل
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
