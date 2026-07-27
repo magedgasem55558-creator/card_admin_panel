@@ -15,6 +15,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
   final _surahCtrl = TextEditingController();
   final _fromCtrl = TextEditingController();
   final _toCtrl = TextEditingController();
+  final _linesCountCtrl = TextEditingController(); // 👈 إضافة متحكم لعدد الأسطر
   final _tomorrowCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _pointsCtrl = TextEditingController(text: '10');
@@ -44,37 +45,46 @@ class _RecitationScreenState extends State<RecitationScreen> {
   }
 
   Future<void> _save() async {
-  if (_selectedStudent == null || _selectedHalaqa == null) return;
-  final service = Provider.of<FirestoreService>(context, listen: false);
-  final data = {
-    'studentId': _selectedStudent,
-    'status': _status,
-    'surah': _status == 'حاضر' ? _surahCtrl.text.trim() : _status,
-    'fromAyah': _fromCtrl.text.trim(),
-    'toAyah': _toCtrl.text.trim(),
-    'grade': _evaluations.isEmpty ? ['جيد'] : _evaluations,   // ✅ يحفظ المصفوفة كاملة
-    'tomorrowRequirement': _tomorrowCtrl.text.trim(),
-    'notes': _notesCtrl.text.trim(),
-    'pointsGiven': int.tryParse(_pointsCtrl.text) ?? 0,
-    'date': DateTime.now().toIso8601String().split('T')[0],
-    'timestamp': FieldValue.serverTimestamp(),
-  };
-  await service.addRecord(data);
-  if (_status == 'حاضر') {
-    await FirebaseFirestore.instance.collection('students').doc(_selectedStudent).update({
-      'totalPoints': FieldValue.increment(data['pointsGiven'] as int),
-    });
-  }
-  if (mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحفظ ✅')));
-  }
-  _surahCtrl.clear();
-  _fromCtrl.clear();
-  _toCtrl.clear();
-  _tomorrowCtrl.clear();
-  _notesCtrl.clear();
-  _pointsCtrl.text = '10';
-  setState(() => _evaluations.clear());
+    if (_selectedStudent == null || _selectedHalaqa == null) return;
+    final service = Provider.of<FirestoreService>(context, listen: false);
+
+    // 🎯 تجهيز الخريطة بنفس الهيكلية المطلوبة تماماً
+    final data = {
+      'date': DateTime.now().toIso8601String().split('T')[0], // (string)
+      'evaluation': _evaluations.isEmpty ? ['جيد'] : List<String>.from(_evaluations), // 👈 (array of strings)
+      'fromAyah': _fromCtrl.text.trim(), // (string)
+      'linesCount': int.tryParse(_linesCountCtrl.text.trim()) ?? 0, // 👈 (int64)
+      'notes': _notesCtrl.text.trim(), // (string)
+      'pointsEarned': int.tryParse(_pointsCtrl.text) ?? 0, // 👈 (int64)
+      'status': _status, // (string)
+      'studentId': _selectedStudent, // (string)
+      'surah': _status == 'حاضر' ? _surahCtrl.text.trim() : _status, // (string)
+      'timestamp': FieldValue.serverTimestamp(), // (timestamp)
+      'toAyah': _toCtrl.text.trim(), // (string)
+      'tomorrowRequirement': _tomorrowCtrl.text.trim(), // (string)
+    };
+
+    await service.addRecord(data);
+
+    if (_status == 'حاضر') {
+      await FirebaseFirestore.instance.collection('students').doc(_selectedStudent).update({
+        'totalPoints': FieldValue.increment(data['pointsEarned'] as int),
+      });
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحفظ ✅')));
+    }
+
+    // إعادة ضبط الحقول بعد الحفظ
+    _surahCtrl.clear();
+    _fromCtrl.clear();
+    _toCtrl.clear();
+    _linesCountCtrl.clear();
+    _tomorrowCtrl.clear();
+    _notesCtrl.clear();
+    _pointsCtrl.text = '10';
+    setState(() => _evaluations.clear());
   }
 
   @override
@@ -146,8 +156,15 @@ class _RecitationScreenState extends State<RecitationScreen> {
                 ],
               ),
               const SizedBox(height: 8),
+              TextField(
+                controller: _linesCountCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'عدد الأسطر'),
+              ),
+              const SizedBox(height: 8),
               Text('تقييم الأداء:', style: Theme.of(context).textTheme.bodyLarge),
               Wrap(
+                spacing: 8.0,
                 children: ['إتقان', 'تجويد', 'حفظ'].map(
                   (e) => FilterChip(
                     label: Text(e),
@@ -164,7 +181,11 @@ class _RecitationScreenState extends State<RecitationScreen> {
                   ),
                 ).toList(),
               ),
-              TextField(controller: _pointsCtrl, decoration: const InputDecoration(labelText: 'النقاط')),
+              TextField(
+                controller: _pointsCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'النقاط'),
+              ),
             ],
             const SizedBox(height: 12),
             TextField(controller: _tomorrowCtrl, decoration: const InputDecoration(labelText: 'المطلوب غداً')),
