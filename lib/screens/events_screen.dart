@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/firestore_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
   @override
@@ -44,6 +45,7 @@ class _EventsScreenState extends State<EventsScreen> {
       'date': _eventDate!.toIso8601String(),
       'lastUpdated': FieldValue.serverTimestamp(),
     });
+    if (!mounted) return; // ✅ بعد العملية غير المتزامنة
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الفعالية ✅')));
   }
 
@@ -59,6 +61,7 @@ class _EventsScreenState extends State<EventsScreen> {
       _titleCtrl.clear();
       _locationCtrl.clear();
       setState(() => _eventDate = null);
+      if (!mounted) return; // ✅ بعد الحذف
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحذف ✅')));
     }
   }
@@ -81,10 +84,19 @@ class _EventsScreenState extends State<EventsScreen> {
                   : 'اختر التاريخ والوقت'),
               trailing: const Icon(Icons.calendar_today),
               onTap: () async {
-                final pickedDate = await showDatePicker(context: context, initialDate: _eventDate ?? DateTime.now(),
-                    firstDate: DateTime.now(), lastDate: DateTime(2100));
+                final pickedDate = await showDatePicker(
+                  context: context,
+                  initialDate: _eventDate ?? DateTime.now(),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime(2100),
+                );
+                if (!mounted) return; // ✅ بعد منتقي التاريخ
                 if (pickedDate != null) {
-                  final pickedTime = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(_eventDate ?? DateTime.now()));
+                  final pickedTime = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.fromDateTime(_eventDate ?? DateTime.now()),
+                  );
+                  if (!mounted) return; // ✅ بعد منتقي الوقت
                   if (pickedTime != null) {
                     setState(() {
                       _eventDate = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
