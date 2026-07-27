@@ -1,6 +1,5 @@
-name: Build Flutter APK
+Name: Build Flutter APK
 
-# يشغل عند رفع أي تغيير على أي فرع أو عند طلب دمج (اختياري)
 on:
   push:
     branches: [ main, master ]
@@ -17,15 +16,12 @@ jobs:
       - name: 🐦 تثبيت Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'  # أو اتركه لآخر إصدار ثابت
+          flutter-version: '3.24.0'
           channel: 'stable'
           cache: true
 
       - name: 📦 تنزيل الحزم
         run: flutter pub get
-
-      - name: 🧪 تحليل الكود (اختياري)
-        run: flutter analyze
 
       - name: 🛠️ بناء APK
         run: flutter build apk --release
