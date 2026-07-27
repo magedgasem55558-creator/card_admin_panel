@@ -25,6 +25,7 @@ class _AddHalaqaScreenState extends State<AddHalaqaScreen> {
       'teacherPhone': _phoneCtrl.text.trim(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت إضافة الحلقة بنجاح ✅')));
     _nameCtrl.clear();
     _teacherCtrl.clear();
