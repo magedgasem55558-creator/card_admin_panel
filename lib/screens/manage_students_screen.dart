@@ -82,6 +82,7 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
+    if (!mounted) return; // ✅ حماية إضافية
     if (failedCount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تم تصفير النقاط، ولكن تعذّر تحديث $failedCount طالب.')),
@@ -148,7 +149,9 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
                   'isActive': isActive,
                 });
                 Navigator.pop(ctx);
+                if (!mounted) return; // ✅ بعد الإغلاق
                 _loadStudents();
+                if (!mounted) return; // ✅ بعد التحميل
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('تم التعديل ✅')),
                 );
@@ -176,7 +179,9 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
     if (confirm == true) {
       final service = Provider.of<FirestoreService>(context, listen: false);
       await service.deleteStudent(student.id);
+      if (!mounted) return; // ✅ بعد الحذف
       _loadStudents();
+      if (!mounted) return; // ✅ بعد التحميل
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تم الحذف ✅')),
       );
