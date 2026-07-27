@@ -15,7 +15,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
   final _surahCtrl = TextEditingController();
   final _fromCtrl = TextEditingController();
   final _toCtrl = TextEditingController();
-  final _linesCountCtrl = TextEditingController(); // 👈 إضافة متحكم لعدد الأسطر
+  final _linesCountCtrl = TextEditingController();
   final _tomorrowCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _pointsCtrl = TextEditingController(text: '10');
@@ -45,22 +45,28 @@ class _RecitationScreenState extends State<RecitationScreen> {
   }
 
   Future<void> _save() async {
-    if (_selectedStudent == null || _selectedHalaqa == null) return;
+    if (_selectedStudent == null || _selectedHalaqa == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى اختيار الحلقة والطالب أولاً')),
+      );
+      return;
+    }
+
     final service = Provider.of<FirestoreService>(context, listen: false);
 
-    // 🎯 تجهيز الخريطة بنفس الهيكلية المطلوبة تماماً
+    // 🎯 الهيكلية المطابقة تماماً لتطبيق ولي الأمر
     final data = {
-      'date': DateTime.now().toIso8601String().split('T')[0], // (string)
-      'evaluation': _evaluations.isEmpty ? ['جيد'] : List<String>.from(_evaluations), // 👈 (array of strings)
-      'fromAyah': _fromCtrl.text.trim(), // (string)
-      'linesCount': int.tryParse(_linesCountCtrl.text.trim()) ?? 0, // 👈 (int64)
+      'date': DateTime.now().toIso8601String().split('T')[0], // (string) e.g., "2026-04-10"
+      'evaluation': List<String>.from(_evaluations), // (array) e.g., ["إتقان", "حفظ", "تجويد"]
+      'fromAyah': _showRecitationFields ? _fromCtrl.text.trim() : "", // (string)
+      'toAyah': _showRecitationFields ? _toCtrl.text.trim() : "", // (string)
+      'linesCount': _showRecitationFields ? (int.tryParse(_linesCountCtrl.text.trim()) ?? 0) : 0, // (int64)
       'notes': _notesCtrl.text.trim(), // (string)
-      'pointsEarned': int.tryParse(_pointsCtrl.text) ?? 0, // 👈 (int64)
+      'pointsEarned': int.tryParse(_pointsCtrl.text) ?? 0, // (int64)
       'status': _status, // (string)
       'studentId': _selectedStudent, // (string)
-      'surah': _status == 'حاضر' ? _surahCtrl.text.trim() : _status, // (string)
+      'surah': _showRecitationFields ? _surahCtrl.text.trim() : "", // (string)
       'timestamp': FieldValue.serverTimestamp(), // (timestamp)
-      'toAyah': _toCtrl.text.trim(), // (string)
       'tomorrowRequirement': _tomorrowCtrl.text.trim(), // (string)
     };
 
@@ -73,7 +79,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحفظ ✅')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحفظ بنجاح ✅')));
     }
 
     // إعادة ضبط الحقول بعد الحفظ
@@ -147,12 +153,27 @@ class _RecitationScreenState extends State<RecitationScreen> {
             ),
             if (_showRecitationFields) ...[
               const SizedBox(height: 12),
-              TextField(controller: _surahCtrl, decoration: const InputDecoration(labelText: 'اسم السورة')),
+              TextField(
+                controller: _surahCtrl,
+                decoration: const InputDecoration(labelText: 'اسم السورة (مثال: الفلق)'),
+              ),
               Row(
                 children: [
-                  Expanded(child: TextField(controller: _fromCtrl, decoration: const InputDecoration(labelText: 'من آية'))),
+                  Expanded(
+                    child: TextField(
+                      controller: _fromCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'من آية'),
+                    ),
+                  ),
                   const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: _toCtrl, decoration: const InputDecoration(labelText: 'إلى آية'))),
+                  Expanded(
+                    child: TextField(
+                      controller: _toCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'إلى آية'),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -161,11 +182,13 @@ class _RecitationScreenState extends State<RecitationScreen> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'عدد الأسطر'),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Text('تقييم الأداء:', style: Theme.of(context).textTheme.bodyLarge),
+              const SizedBox(height: 6),
+              // 🎯 عناصر التقييم الثلاثة التي يبحث عنها تطبيق ولي الأمر بالضبط
               Wrap(
                 spacing: 8.0,
-                children: ['إتقان', 'تجويد', 'حفظ'].map(
+                children: ['إتقان', 'حفظ', 'تجويد'].map(
                   (e) => FilterChip(
                     label: Text(e),
                     selected: _evaluations.contains(e),
@@ -181,17 +204,31 @@ class _RecitationScreenState extends State<RecitationScreen> {
                   ),
                 ).toList(),
               ),
+              const SizedBox(height: 8),
               TextField(
                 controller: _pointsCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'النقاط'),
+                decoration: const InputDecoration(labelText: 'النقاط المكتسبة'),
               ),
             ],
             const SizedBox(height: 12),
-            TextField(controller: _tomorrowCtrl, decoration: const InputDecoration(labelText: 'المطلوب غداً')),
-            TextField(controller: _notesCtrl, decoration: const InputDecoration(labelText: 'ملاحظات')),
+            TextField(
+              controller: _tomorrowCtrl,
+              decoration: const InputDecoration(labelText: 'المطلوب غداً (مثال: الكوثر)'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _notesCtrl,
+              decoration: const InputDecoration(labelText: 'ملاحظات المدرس'),
+            ),
             const SizedBox(height: 24),
-            ElevatedButton(onPressed: _save, child: const Text('📤 إرسال التحديث')),
+            ElevatedButton(
+              onPressed: _save,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: const Text('📤 إرسال التحديث', style: TextStyle(fontSize: 16)),
+            ),
           ],
         ),
       ),
