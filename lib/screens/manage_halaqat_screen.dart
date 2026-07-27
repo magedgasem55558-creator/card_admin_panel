@@ -52,6 +52,7 @@ class _ManageHalaqatScreenState extends State<ManageHalaqatScreen> {
             });
             Navigator.pop(ctx);
             _loadData();
+            if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم التعديل ✅')));
           }, child: const Text('حفظ')),
         ],
