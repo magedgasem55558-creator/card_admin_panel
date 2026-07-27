@@ -145,7 +145,9 @@ class _ManageRecordsScreenState extends State<ManageRecordsScreen> {
     if (confirm == true) {
       final service = Provider.of<FirestoreService>(context, listen: false);
       await service.deleteRecord(record.id);
+      if (!mounted) return;
       _loadData();
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تم الحذف ✅')),
       );
