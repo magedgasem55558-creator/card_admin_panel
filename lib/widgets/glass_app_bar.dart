@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final List<Widget>? actions;
-  const GlassAppBar({required this.title, this.actions, Key? key}) : super(key: key);
+  const GlassAppBar({super.key, required this.title, this.actions});
 
   @override
   Widget build(BuildContext context) {
