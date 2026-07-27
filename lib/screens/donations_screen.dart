@@ -44,6 +44,7 @@ class _DonationsScreenState extends State<DonationsScreen> {
       'hadith': _hadithCtrl.text.trim(),
       'lastUpdated': FieldValue.serverTimestamp(),
     });
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ بيانات التبرعات ✅')));
   }
 
