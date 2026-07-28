@@ -54,20 +54,24 @@ class _RecitationScreenState extends State<RecitationScreen> {
 
     final service = Provider.of<FirestoreService>(context, listen: false);
 
-    // 🎯 الهيكلية المطابقة تماماً لتطبيق ولي الأمر
+    // 🎯 تجهيز القائمة المختارة
+    final evalList = List<String>.from(_evaluations);
+
+    // 🎯 الهيكلية المتوافقة كلياً مع كود ولي الأمر القديم والجديد
     final data = {
-      'date': DateTime.now().toIso8601String().split('T')[0], // (string) e.g., "2026-04-10"
-      'evaluation': List<String>.from(_evaluations), // (array) e.g., ["إتقان", "حفظ", "تجويد"]
-      'fromAyah': _showRecitationFields ? _fromCtrl.text.trim() : "", // (string)
-      'toAyah': _showRecitationFields ? _toCtrl.text.trim() : "", // (string)
-      'linesCount': _showRecitationFields ? (int.tryParse(_linesCountCtrl.text.trim()) ?? 0) : 0, // (int64)
-      'notes': _notesCtrl.text.trim(), // (string)
-      'pointsEarned': int.tryParse(_pointsCtrl.text) ?? 0, // (int64)
-      'status': _status, // (string)
-      'studentId': _selectedStudent, // (string)
-      'surah': _showRecitationFields ? _surahCtrl.text.trim() : "", // (string)
-      'timestamp': FieldValue.serverTimestamp(), // (timestamp)
-      'tomorrowRequirement': _tomorrowCtrl.text.trim(), // (string)
+      'date': DateTime.now().toIso8601String().split('T')[0],
+      'grade': evalList,        // 👈 هذا ما يبحث عنه كود ولي الأمر القديم (data['grade'])
+      'evaluation': evalList,   // 👈 التقييم بالمسمى الحديث لضمان التوافق المستقبلي
+      'fromAyah': _showRecitationFields ? _fromCtrl.text.trim() : "",
+      'toAyah': _showRecitationFields ? _toCtrl.text.trim() : "",
+      'linesCount': _showRecitationFields ? (int.tryParse(_linesCountCtrl.text.trim()) ?? 0) : 0,
+      'notes': _notesCtrl.text.trim(),
+      'pointsEarned': int.tryParse(_pointsCtrl.text) ?? 0,
+      'status': _status,
+      'studentId': _selectedStudent,
+      'surah': _showRecitationFields ? _surahCtrl.text.trim() : "",
+      'timestamp': FieldValue.serverTimestamp(),
+      'tomorrowRequirement': _tomorrowCtrl.text.trim(),
     };
 
     await service.addRecord(data);
@@ -185,7 +189,6 @@ class _RecitationScreenState extends State<RecitationScreen> {
               const SizedBox(height: 12),
               Text('تقييم الأداء:', style: Theme.of(context).textTheme.bodyLarge),
               const SizedBox(height: 6),
-              // 🎯 عناصر التقييم الثلاثة التي يبحث عنها تطبيق ولي الأمر بالضبط
               Wrap(
                 spacing: 8.0,
                 children: ['إتقان', 'حفظ', 'تجويد'].map(
