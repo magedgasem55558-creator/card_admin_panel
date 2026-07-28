@@ -1,4 +1,4 @@
-import 'package me/flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../services/firestore_service.dart';
@@ -45,6 +45,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
     super.dispose();
   }
 
+  // 1. تحميل الحلقات بنفس منطق الـ JS
   Future<void> _loadHalaqat() async {
     final service = Provider.of<FirestoreService>(context, listen: false);
     final list = await service.loadHalaqatList();
@@ -59,6 +60,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
     });
   }
 
+  // 2. فلترة الطلاب عند تغيير الحلقة
   Future<void> _loadStudents(String halaqaId) async {
     final service = Provider.of<FirestoreService>(context, listen: false);
     final list = await service.loadStudentsByHalaqa(halaqaId);
@@ -71,6 +73,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
     });
   }
 
+  // 3. دالة الحفظ المطابقة تماماً لكود الـ JS
   Future<void> _save() async {
     if (_selectedStudent == null || _selectedHalaqa == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -93,12 +96,13 @@ class _RecitationScreenState extends State<RecitationScreen> {
       return;
     }
 
-    // 🎯 منطق حساب grade الدقيق المطابق لكود الـ JS
+    // 🎯 حساب grade بنفس طريقة الـ JS
+    // const grade = evaluations.length > 0 ? evaluations[0] : (status === "حاضر" ? "جيد" : "-");
     final String grade = _evaluations.isNotEmpty
         ? _evaluations.first
         : (_status == 'حاضر' ? 'جيد' : '-');
 
-    // 🎯 جلب رقم هاتف المعلم الخاص بالحلقة المحددة
+    // 🎯 جلب رقم هاتف المعلم من بيانات الحلقة
     final selectedHalaqaData = _halaqat.firstWhere(
       (h) => h['id'] == _selectedHalaqa,
       orElse: () => {'teacherPhone': '967770000000'},
@@ -106,25 +110,25 @@ class _RecitationScreenState extends State<RecitationScreen> {
     final String teacherPhone = selectedHalaqaData['teacherPhone'] ?? "967770000000";
 
     try {
-      // 🎯 البنية المطابقة لـ JavaScript Firestore addDoc
+      // 🎯 البنية المطابقة لـ Firestore addDoc في JS
       final Map<String, dynamic> recordData = {
         'studentId': _selectedStudent,
         'status': _status,
         'surah': _status == 'حاضر' ? surah : _status,
         'fromAyah': fromAya.isNotEmpty ? fromAya : "0",
         'toAyah': toAya.isNotEmpty ? toAya : "0",
-        'grade': grade, // (string)
+        'grade': grade,
         'tomorrowRequirement': tomorrowReq.isNotEmpty ? tomorrowReq : "لا يوجد",
         'notes': notes,
         'teacherPhone': teacherPhone,
-        'pointsGiven': points, // (int)
-        'date': DateTime.now().toIso8601String().split('T')[0], // yyyy-MM-dd
+        'pointsGiven': points,
+        'date': DateTime.now().toIso8601String().split('T')[0],
         'timestamp': FieldValue.serverTimestamp(),
       };
 
       await FirebaseFirestore.instance.collection('records').add(recordData);
 
-      // 🎯 زيادة النقاط للطالب عند الحضور
+      // 🎯 زيادة النقاط بنفس الشرط
       if (_status == 'حاضر' && points > 0) {
         await FirebaseFirestore.instance
             .collection('students')
@@ -140,7 +144,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
         );
       }
 
-      // 🎯 إعادة تصفير الحقول كود الـ JS
+      // 🎯 إعادة تصفير الحقول مثل الـ JS
       _surahCtrl.clear();
       _fromCtrl.clear();
       _toCtrl.clear();
@@ -167,7 +171,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
         padding: const EdgeInsets.all(16.0),
         child: ListView(
           children: [
-            // القائمة المنسدلة للحلقات
+            // قائمة الحلقات
             DropdownButtonFormField<String>(
               value: _selectedHalaqa,
               decoration: const InputDecoration(labelText: 'اختر الحلقة...'),
@@ -188,7 +192,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
             ),
             const SizedBox(height: 12),
 
-            // القائمة المنسدلة للطلاب
+            // قائمة الطلاب
             DropdownButtonFormField<String>(
               value: _selectedStudent,
               decoration: const InputDecoration(labelText: 'اختر الطالب...'),
@@ -223,7 +227,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
               },
             ),
 
-            // حقول التسميع (تظهر عند الحضور فقط)
+            // حقول التسميع (عند الحضور فقط)
             if (_showRecitationFields) ...[
               const SizedBox(height: 12),
               TextField(
