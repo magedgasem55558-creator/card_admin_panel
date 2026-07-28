@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package me/flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../services/firestore_service.dart';
 
 class RecitationScreen extends StatefulWidget {
   const RecitationScreen({super.key});
+
   @override
   State<RecitationScreen> createState() => _RecitationScreenState();
 }
@@ -12,13 +13,14 @@ class RecitationScreen extends StatefulWidget {
 class _RecitationScreenState extends State<RecitationScreen> {
   String? _selectedHalaqa;
   String? _selectedStudent;
+
   final _surahCtrl = TextEditingController();
   final _fromCtrl = TextEditingController();
   final _toCtrl = TextEditingController();
-  final _linesCountCtrl = TextEditingController();
   final _tomorrowCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _pointsCtrl = TextEditingController(text: '10');
+
   String _status = 'حاضر';
   final List<String> _evaluations = [];
   bool _showRecitationFields = true;
@@ -32,69 +34,129 @@ class _RecitationScreenState extends State<RecitationScreen> {
     _loadHalaqat();
   }
 
+  @override
+  void dispose() {
+    _surahCtrl.dispose();
+    _fromCtrl.dispose();
+    _toCtrl.dispose();
+    _tomorrowCtrl.dispose();
+    _notesCtrl.dispose();
+    _pointsCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadHalaqat() async {
     final service = Provider.of<FirestoreService>(context, listen: false);
     final list = await service.loadHalaqatList();
-    setState(() => _halaqat = list.map((h) => {'id': h.id, 'name': '${h.name} - ${h.teacherName}'}).toList());
+
+    setState(() {
+      _halaqat = list.map((h) => {
+        'id': h.id,
+        'name': h.name,
+        'teacherName': h.teacherName,
+        'teacherPhone': h.teacherPhone ?? "967770000000",
+      }).toList();
+    });
   }
 
   Future<void> _loadStudents(String halaqaId) async {
     final service = Provider.of<FirestoreService>(context, listen: false);
     final list = await service.loadStudentsByHalaqa(halaqaId);
-    setState(() => _students = list.map((s) => {'id': s.id, 'name': s.name}).toList());
+
+    setState(() {
+      _students = list.map((s) => {
+        'id': s.id,
+        'name': s.name,
+      }).toList();
+    });
   }
 
   Future<void> _save() async {
     if (_selectedStudent == null || _selectedHalaqa == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى اختيار الحلقة والطالب أولاً')),
+        const SnackBar(content: Text('يرجى اختيار الحلقة والطالب')),
       );
       return;
     }
 
-    final service = Provider.of<FirestoreService>(context, listen: false);
+    final String surah = _surahCtrl.text.trim();
+    final String fromAya = _fromCtrl.text.trim();
+    final String toAya = _toCtrl.text.trim();
+    final String tomorrowReq = _tomorrowCtrl.text.trim();
+    final String notes = _notesCtrl.text.trim();
+    final int points = int.tryParse(_pointsCtrl.text.trim()) ?? 0;
 
-    // 🎯 تجهيز القائمة المختارة
-    final evalList = List<String>.from(_evaluations);
+    if (_status == 'حاضر' && surah.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى إدخال اسم السورة')),
+      );
+      return;
+    }
 
-    // 🎯 الهيكلية المتوافقة كلياً مع كود ولي الأمر القديم والجديد
-    final data = {
-      'date': DateTime.now().toIso8601String().split('T')[0],
-      'grade': evalList,        // 👈 هذا ما يبحث عنه كود ولي الأمر القديم (data['grade'])
-      'evaluation': evalList,   // 👈 التقييم بالمسمى الحديث لضمان التوافق المستقبلي
-      'fromAyah': _showRecitationFields ? _fromCtrl.text.trim() : "",
-      'toAyah': _showRecitationFields ? _toCtrl.text.trim() : "",
-      'linesCount': _showRecitationFields ? (int.tryParse(_linesCountCtrl.text.trim()) ?? 0) : 0,
-      'notes': _notesCtrl.text.trim(),
-      'pointsEarned': int.tryParse(_pointsCtrl.text) ?? 0,
-      'status': _status,
-      'studentId': _selectedStudent,
-      'surah': _showRecitationFields ? _surahCtrl.text.trim() : "",
-      'timestamp': FieldValue.serverTimestamp(),
-      'tomorrowRequirement': _tomorrowCtrl.text.trim(),
-    };
+    // 🎯 منطق حساب grade الدقيق المطابق لكود الـ JS
+    final String grade = _evaluations.isNotEmpty
+        ? _evaluations.first
+        : (_status == 'حاضر' ? 'جيد' : '-');
 
-    await service.addRecord(data);
+    // 🎯 جلب رقم هاتف المعلم الخاص بالحلقة المحددة
+    final selectedHalaqaData = _halaqat.firstWhere(
+      (h) => h['id'] == _selectedHalaqa,
+      orElse: () => {'teacherPhone': '967770000000'},
+    );
+    final String teacherPhone = selectedHalaqaData['teacherPhone'] ?? "967770000000";
 
-    if (_status == 'حاضر') {
-      await FirebaseFirestore.instance.collection('students').doc(_selectedStudent).update({
-        'totalPoints': FieldValue.increment(data['pointsEarned'] as int),
+    try {
+      // 🎯 البنية المطابقة لـ JavaScript Firestore addDoc
+      final Map<String, dynamic> recordData = {
+        'studentId': _selectedStudent,
+        'status': _status,
+        'surah': _status == 'حاضر' ? surah : _status,
+        'fromAyah': fromAya.isNotEmpty ? fromAya : "0",
+        'toAyah': toAya.isNotEmpty ? toAya : "0",
+        'grade': grade, // (string)
+        'tomorrowRequirement': tomorrowReq.isNotEmpty ? tomorrowReq : "لا يوجد",
+        'notes': notes,
+        'teacherPhone': teacherPhone,
+        'pointsGiven': points, // (int)
+        'date': DateTime.now().toIso8601String().split('T')[0], // yyyy-MM-dd
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance.collection('records').add(recordData);
+
+      // 🎯 زيادة النقاط للطالب عند الحضور
+      if (_status == 'حاضر' && points > 0) {
+        await FirebaseFirestore.instance
+            .collection('students')
+            .doc(_selectedStudent)
+            .update({
+          'totalPoints': FieldValue.increment(points),
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✅ تم تحديث سجل الطالب\n📊 النقاط: $points')),
+        );
+      }
+
+      // 🎯 إعادة تصفير الحقول كود الـ JS
+      _surahCtrl.clear();
+      _fromCtrl.clear();
+      _toCtrl.clear();
+      _tomorrowCtrl.clear();
+      _notesCtrl.clear();
+      _pointsCtrl.text = _status == 'حاضر' ? '10' : '0';
+      setState(() {
+        _evaluations.clear();
       });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ: ${e.toString()}')),
+        );
+      }
     }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحفظ بنجاح ✅')));
-    }
-
-    // إعادة ضبط الحقول بعد الحفظ
-    _surahCtrl.clear();
-    _fromCtrl.clear();
-    _toCtrl.clear();
-    _linesCountCtrl.clear();
-    _tomorrowCtrl.clear();
-    _notesCtrl.clear();
-    _pointsCtrl.text = '10';
-    setState(() => _evaluations.clear());
   }
 
   @override
@@ -102,65 +164,73 @@ class _RecitationScreenState extends State<RecitationScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('رصد التسميع')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: ListView(
           children: [
+            // القائمة المنسدلة للحلقات
             DropdownButtonFormField<String>(
               value: _selectedHalaqa,
-              items: _halaqat
-                  .map<DropdownMenuItem<String>>(
-                    (h) => DropdownMenuItem<String>(
-                      value: h['id'] as String,
-                      child: Text(h['name'] as String),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) {
+              decoration: const InputDecoration(labelText: 'اختر الحلقة...'),
+              items: _halaqat.map((h) {
+                return DropdownMenuItem<String>(
+                  value: h['id'] as String,
+                  child: Text("${h['name']} - (الشيخ: ${h['teacherName']})"),
+                );
+              }).toList(),
+              onChanged: (val) {
                 setState(() {
-                  _selectedHalaqa = v;
+                  _selectedHalaqa = val;
                   _selectedStudent = null;
+                  _students.clear();
                 });
-                if (v != null) _loadStudents(v);
+                if (val != null) _loadStudents(val);
               },
-              decoration: const InputDecoration(labelText: 'الحلقة'),
             ),
             const SizedBox(height: 12),
+
+            // القائمة المنسدلة للطلاب
             DropdownButtonFormField<String>(
               value: _selectedStudent,
-              items: _students
-                  .map<DropdownMenuItem<String>>(
-                    (s) => DropdownMenuItem<String>(
-                      value: s['id'] as String,
-                      child: Text(s['name'] as String),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedStudent = v),
-              decoration: const InputDecoration(labelText: 'الطالب'),
+              decoration: const InputDecoration(labelText: 'اختر الطالب...'),
+              items: _students.map((s) {
+                return DropdownMenuItem<String>(
+                  value: s['id'] as String,
+                  child: Text(s['name'] as String),
+                );
+              }).toList(),
+              onChanged: (val) {
+                setState(() => _selectedStudent = val);
+              },
             ),
             const SizedBox(height: 16),
+
+            // حالة الحضور
             DropdownButtonFormField<String>(
               value: _status,
+              decoration: const InputDecoration(labelText: 'الحالة'),
               items: const [
-                DropdownMenuItem<String>(value: 'حاضر', child: Text('✅ حاضر')),
-                DropdownMenuItem<String>(value: 'غائب', child: Text('❌ غائب')),
-                DropdownMenuItem<String>(value: 'إجازة', child: Text('🔵 إجازة')),
+                DropdownMenuItem(value: 'حاضر', child: Text('حاضر')),
+                DropdownMenuItem(value: 'غائب', child: Text('غائب')),
+                DropdownMenuItem(value: 'إجازة', child: Text('إجازة')),
               ],
-              onChanged: (v) {
+              onChanged: (val) {
+                if (val == null) return;
                 setState(() {
-                  _status = v!;
-                  _showRecitationFields = v == 'حاضر';
-                  _pointsCtrl.text = _showRecitationFields ? '10' : '0';
+                  _status = val;
+                  _showRecitationFields = val == 'حاضر';
+                  _pointsCtrl.text = val == 'حاضر' ? '10' : '0';
                 });
               },
-              decoration: const InputDecoration(labelText: 'الحالة'),
             ),
+
+            // حقول التسميع (تظهر عند الحضور فقط)
             if (_showRecitationFields) ...[
               const SizedBox(height: 12),
               TextField(
                 controller: _surahCtrl,
-                decoration: const InputDecoration(labelText: 'اسم السورة (مثال: الفلق)'),
+                decoration: const InputDecoration(labelText: 'السورة الحالية'),
               ),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
@@ -180,57 +250,53 @@ class _RecitationScreenState extends State<RecitationScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _linesCountCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'عدد الأسطر'),
-              ),
               const SizedBox(height: 12),
-              Text('تقييم الأداء:', style: Theme.of(context).textTheme.bodyLarge),
+              const Text('التقييم:', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 8.0,
-                children: ['إتقان', 'حفظ', 'تجويد'].map(
-                  (e) => FilterChip(
+                children: ['إتقان', 'حفظ', 'تجويد', 'ممتاز', 'جيد جداً', 'جيد'].map((e) {
+                  return FilterChip(
                     label: Text(e),
                     selected: _evaluations.contains(e),
-                    onSelected: (val) {
+                    onSelected: (selected) {
                       setState(() {
-                        if (val) {
+                        if (selected) {
                           _evaluations.add(e);
                         } else {
                           _evaluations.remove(e);
                         }
                       });
                     },
-                  ),
-                ).toList(),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _pointsCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'النقاط المكتسبة'),
+                  );
+                }).toList(),
               ),
             ],
+
             const SizedBox(height: 12),
             TextField(
+              controller: _pointsCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'النقاط الممنوحة'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
               controller: _tomorrowCtrl,
-              decoration: const InputDecoration(labelText: 'المطلوب غداً (مثال: الكوثر)'),
+              decoration: const InputDecoration(labelText: 'المطلوب غداً'),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _notesCtrl,
-              decoration: const InputDecoration(labelText: 'ملاحظات المدرس'),
+              decoration: const InputDecoration(labelText: 'ملاحظات المعلم'),
             ),
             const SizedBox(height: 24),
+
             ElevatedButton(
               onPressed: _save,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-              child: const Text('📤 إرسال التحديث', style: TextStyle(fontSize: 16)),
+              child: const Text('حفظ السجل', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),
