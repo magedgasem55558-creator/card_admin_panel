@@ -27,12 +27,18 @@ class _RecitationScreenState extends State<RecitationScreen> {
 
   List<Map<String, dynamic>> _halaqat = [];
   List<Map<String, dynamic>> _students = [];
+  
+  bool _isLoadingHalaqat = false;
   bool _isLoadingStudents = false;
+  bool _isSaving = false; // 🎯 لمنع الضغط المزدوج وإظهار التحميل على الزر
 
   @override
   void initState() {
     super.initState();
-    _loadHalaqat();
+    // استخدام addPostFrameCallback لضمان جاهزية الـ Context مع Provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadHalaqat();
+    });
   }
 
   @override
@@ -46,8 +52,9 @@ class _RecitationScreenState extends State<RecitationScreen> {
     super.dispose();
   }
 
-  // 1. تحميل قائمة الحلقات
+  // 1. تحميل الحلقات بأمان
   Future<void> _loadHalaqat() async {
+    setState(() => _isLoadingHalaqat = true);
     try {
       final service = Provider.of<FirestoreService>(context, listen: false);
       final list = await service.loadHalaqatList();
@@ -55,17 +62,20 @@ class _RecitationScreenState extends State<RecitationScreen> {
       setState(() {
         _halaqat = list.map((h) => {
           'id': h.id,
-          'name': h.name,
-          'teacherName': h.teacherName,
+          'name': h.name ?? 'حلقة بدون اسم',
+          'teacherName': h.teacherName ?? 'غير محدد',
           'teacherPhone': h.teacherPhone ?? "967770000000",
         }).toList();
       });
     } catch (e) {
       debugPrint('❌ خطأ أثناء تحميل الحلقات: $e');
+      _showSnackBar('حدث خطأ أثناء تحميل الحلقات: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingHalaqat = false);
     }
   }
 
-  // 2. تحميل طلاب الحلقة المحددة
+  // 2. تحميل الطلاب بأمان
   Future<void> _loadStudents(String halaqaId) async {
     setState(() => _isLoadingStudents = true);
     try {
@@ -75,29 +85,32 @@ class _RecitationScreenState extends State<RecitationScreen> {
       setState(() {
         _students = list.map((s) => {
           'id': s.id,
-          'name': s.name,
+          'name': s.name ?? 'طالب بدون اسم',
         }).toList();
       });
     } catch (e) {
       debugPrint('❌ خطأ أثناء تحميل الطلاب: $e');
+      _showSnackBar('حدث خطأ أثناء تحميل الطلاب: $e');
     } finally {
-      setState(() => _isLoadingStudents = false);
+      if (mounted) setState(() => _isLoadingStudents = false);
     }
   }
 
-  // 3. حفظ التسميع بنفس طريقة الـ JavaScript تماماً
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  // 3. دالة الحفظ الرئيسية
   Future<void> _save() async {
-    if (_selectedHalaqa == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى اختيار الحلقة')),
-      );
+    // 🛑 التحقق من المدخلات الأساسية
+    if (_selectedHalaqa == null || _selectedHalaqa!.isEmpty) {
+      _showSnackBar('⚠️ يرجى اختيار الحلقة أولاً');
       return;
     }
 
-    if (_selectedStudent == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى اختيار الطالب')),
-      );
+    if (_selectedStudent == null || _selectedStudent!.isEmpty) {
+      _showSnackBar('⚠️ يرجى اختيار الطالب أولاً');
       return;
     }
 
@@ -109,25 +122,26 @@ class _RecitationScreenState extends State<RecitationScreen> {
     final int points = int.tryParse(_pointsCtrl.text.trim()) ?? 0;
 
     if (_status == 'حاضر' && surah.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى إدخال اسم السورة')),
-      );
+      _showSnackBar('⚠️ يرجى إدخال اسم السورة');
       return;
     }
 
-    // 🎯 حساب grade بنفس منطق الـ JS
-    final String grade = _evaluations.isNotEmpty
-        ? _evaluations.first
-        : (_status == 'حاضر' ? 'جيد' : '-');
-
-    // 🎯 جلب رقم المعلم
-    final selectedHalaqaData = _halaqat.firstWhere(
-      (h) => h['id'] == _selectedHalaqa,
-      orElse: () => {'teacherPhone': '967770000000'},
-    );
-    final String teacherPhone = selectedHalaqaData['teacherPhone'] ?? "967770000000";
+    setState(() => _isSaving = true);
 
     try {
+      // حساب grade مفرد بنفس منطق الـ JS
+      final String grade = _evaluations.isNotEmpty
+          ? _evaluations.first
+          : (_status == 'حاضر' ? 'جيد' : '-');
+
+      // جلب رقم الهاتف
+      final selectedHalaqaData = _halaqat.firstWhere(
+        (h) => h['id'] == _selectedHalaqa,
+        orElse: () => {'teacherPhone': '967770000000'},
+      );
+      final String teacherPhone = selectedHalaqaData['teacherPhone'] ?? "967770000000";
+
+      // البيانات المطابقة تماماً لهيكلية JS
       final Map<String, dynamic> recordData = {
         'studentId': _selectedStudent,
         'status': _status,
@@ -143,10 +157,10 @@ class _RecitationScreenState extends State<RecitationScreen> {
         'timestamp': FieldValue.serverTimestamp(),
       };
 
-      // الحفظ في كولكشن records
+      // 🎯 الإضافة المباشرة لـ Firestore
       await FirebaseFirestore.instance.collection('records').add(recordData);
 
-      // زيادة النقاط للطالب عند الحضور
+      // زيادة النقاط عند الحضور
       if (_status == 'حاضر' && points > 0) {
         await FirebaseFirestore.instance
             .collection('students')
@@ -156,13 +170,9 @@ class _RecitationScreenState extends State<RecitationScreen> {
         });
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('✅ تم تحديث سجل الطالب\n📊 النقاط: $points')),
-        );
-      }
+      _showSnackBar('✅ تم تحديث سجل الطالب بنجاح\n📊 النقاط: $points');
 
-      // تصفير الحقول
+      // إعادة تصفير النموذج
       _surahCtrl.clear();
       _fromCtrl.clear();
       _toCtrl.clear();
@@ -172,14 +182,13 @@ class _RecitationScreenState extends State<RecitationScreen> {
       setState(() {
         _evaluations.clear();
       });
+
     } catch (e, stackTrace) {
-      debugPrint('❌ خطأ أثناء الحفظ: $e');
+      debugPrint('❌ خطأ Firestore: $e');
       debugPrint('Stack trace: $stackTrace');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ في الحفظ: ${e.toString()}')),
-        );
-      }
+      _showSnackBar('❌ فشل الحفظ: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -194,7 +203,16 @@ class _RecitationScreenState extends State<RecitationScreen> {
             // اختيار الحلقة
             DropdownButtonFormField<String>(
               value: _selectedHalaqa,
-              decoration: const InputDecoration(labelText: 'اختر الحلقة...'),
+              decoration: InputDecoration(
+                labelText: 'اختر الحلقة...',
+                suffixIcon: _isLoadingHalaqat
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
+              ),
               items: _halaqat.map((h) {
                 return DropdownMenuItem<String>(
                   value: h['id'] as String,
@@ -202,12 +220,13 @@ class _RecitationScreenState extends State<RecitationScreen> {
                 );
               }).toList(),
               onChanged: (val) {
+                if (val == null) return;
                 setState(() {
                   _selectedHalaqa = val;
                   _selectedStudent = null;
                   _students.clear();
                 });
-                if (val != null) _loadStudents(val);
+                _loadStudents(val);
               },
             ),
             const SizedBox(height: 12),
@@ -256,7 +275,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
               },
             ),
 
-            // حقول التسميع (عند الحضور فقط)
+            // حقول التسميع (عند الحضور)
             if (_showRecitationFields) ...[
               const SizedBox(height: 12),
               TextField(
@@ -324,12 +343,19 @@ class _RecitationScreenState extends State<RecitationScreen> {
             ),
             const SizedBox(height: 24),
 
+            // زر الحفظ المزود بـ Loading Indicator
             ElevatedButton(
-              onPressed: _save,
+              onPressed: _isSaving ? null : _save,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-              child: const Text('حفظ السجل', style: TextStyle(fontSize: 16)),
+              child: _isSaving
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('حفظ السجل', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),
