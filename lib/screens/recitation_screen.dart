@@ -27,6 +27,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
 
   List<Map<String, dynamic>> _halaqat = [];
   List<Map<String, dynamic>> _students = [];
+  bool _isLoadingStudents = false;
 
   @override
   void initState() {
@@ -45,39 +46,57 @@ class _RecitationScreenState extends State<RecitationScreen> {
     super.dispose();
   }
 
-  // 1. تحميل الحلقات بنفس منطق الـ JS
+  // 1. تحميل قائمة الحلقات
   Future<void> _loadHalaqat() async {
-    final service = Provider.of<FirestoreService>(context, listen: false);
-    final list = await service.loadHalaqatList();
+    try {
+      final service = Provider.of<FirestoreService>(context, listen: false);
+      final list = await service.loadHalaqatList();
 
-    setState(() {
-      _halaqat = list.map((h) => {
-        'id': h.id,
-        'name': h.name,
-        'teacherName': h.teacherName,
-        'teacherPhone': h.teacherPhone ?? "967770000000",
-      }).toList();
-    });
+      setState(() {
+        _halaqat = list.map((h) => {
+          'id': h.id,
+          'name': h.name,
+          'teacherName': h.teacherName,
+          'teacherPhone': h.teacherPhone ?? "967770000000",
+        }).toList();
+      });
+    } catch (e) {
+      debugPrint('❌ خطأ أثناء تحميل الحلقات: $e');
+    }
   }
 
-  // 2. فلترة الطلاب عند تغيير الحلقة
+  // 2. تحميل طلاب الحلقة المحددة
   Future<void> _loadStudents(String halaqaId) async {
-    final service = Provider.of<FirestoreService>(context, listen: false);
-    final list = await service.loadStudentsByHalaqa(halaqaId);
+    setState(() => _isLoadingStudents = true);
+    try {
+      final service = Provider.of<FirestoreService>(context, listen: false);
+      final list = await service.loadStudentsByHalaqa(halaqaId);
 
-    setState(() {
-      _students = list.map((s) => {
-        'id': s.id,
-        'name': s.name,
-      }).toList();
-    });
+      setState(() {
+        _students = list.map((s) => {
+          'id': s.id,
+          'name': s.name,
+        }).toList();
+      });
+    } catch (e) {
+      debugPrint('❌ خطأ أثناء تحميل الطلاب: $e');
+    } finally {
+      setState(() => _isLoadingStudents = false);
+    }
   }
 
-  // 3. دالة الحفظ المطابقة تماماً لكود الـ JS
+  // 3. حفظ التسميع بنفس طريقة الـ JavaScript تماماً
   Future<void> _save() async {
-    if (_selectedStudent == null || _selectedHalaqa == null) {
+    if (_selectedHalaqa == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى اختيار الحلقة والطالب')),
+        const SnackBar(content: Text('يرجى اختيار الحلقة')),
+      );
+      return;
+    }
+
+    if (_selectedStudent == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى اختيار الطالب')),
       );
       return;
     }
@@ -96,13 +115,12 @@ class _RecitationScreenState extends State<RecitationScreen> {
       return;
     }
 
-    // 🎯 حساب grade بنفس طريقة الـ JS
-    // const grade = evaluations.length > 0 ? evaluations[0] : (status === "حاضر" ? "جيد" : "-");
+    // 🎯 حساب grade بنفس منطق الـ JS
     final String grade = _evaluations.isNotEmpty
         ? _evaluations.first
         : (_status == 'حاضر' ? 'جيد' : '-');
 
-    // 🎯 جلب رقم هاتف المعلم من بيانات الحلقة
+    // 🎯 جلب رقم المعلم
     final selectedHalaqaData = _halaqat.firstWhere(
       (h) => h['id'] == _selectedHalaqa,
       orElse: () => {'teacherPhone': '967770000000'},
@@ -110,7 +128,6 @@ class _RecitationScreenState extends State<RecitationScreen> {
     final String teacherPhone = selectedHalaqaData['teacherPhone'] ?? "967770000000";
 
     try {
-      // 🎯 البنية المطابقة لـ Firestore addDoc في JS
       final Map<String, dynamic> recordData = {
         'studentId': _selectedStudent,
         'status': _status,
@@ -126,9 +143,10 @@ class _RecitationScreenState extends State<RecitationScreen> {
         'timestamp': FieldValue.serverTimestamp(),
       };
 
+      // الحفظ في كولكشن records
       await FirebaseFirestore.instance.collection('records').add(recordData);
 
-      // 🎯 زيادة النقاط بنفس الشرط
+      // زيادة النقاط للطالب عند الحضور
       if (_status == 'حاضر' && points > 0) {
         await FirebaseFirestore.instance
             .collection('students')
@@ -144,7 +162,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
         );
       }
 
-      // 🎯 إعادة تصفير الحقول مثل الـ JS
+      // تصفير الحقول
       _surahCtrl.clear();
       _fromCtrl.clear();
       _toCtrl.clear();
@@ -154,10 +172,12 @@ class _RecitationScreenState extends State<RecitationScreen> {
       setState(() {
         _evaluations.clear();
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ خطأ أثناء الحفظ: $e');
+      debugPrint('Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ: ${e.toString()}')),
+          SnackBar(content: Text('خطأ في الحفظ: ${e.toString()}')),
         );
       }
     }
@@ -171,7 +191,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
         padding: const EdgeInsets.all(16.0),
         child: ListView(
           children: [
-            // قائمة الحلقات
+            // اختيار الحلقة
             DropdownButtonFormField<String>(
               value: _selectedHalaqa,
               decoration: const InputDecoration(labelText: 'اختر الحلقة...'),
@@ -192,10 +212,19 @@ class _RecitationScreenState extends State<RecitationScreen> {
             ),
             const SizedBox(height: 12),
 
-            // قائمة الطلاب
+            // اختيار الطالب
             DropdownButtonFormField<String>(
               value: _selectedStudent,
-              decoration: const InputDecoration(labelText: 'اختر الطالب...'),
+              decoration: InputDecoration(
+                labelText: 'اختر الطالب...',
+                suffixIcon: _isLoadingStudents
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
+              ),
               items: _students.map((s) {
                 return DropdownMenuItem<String>(
                   value: s['id'] as String,
@@ -208,7 +237,7 @@ class _RecitationScreenState extends State<RecitationScreen> {
             ),
             const SizedBox(height: 16),
 
-            // حالة الحضور
+            // الحالة
             DropdownButtonFormField<String>(
               value: _status,
               decoration: const InputDecoration(labelText: 'الحالة'),
